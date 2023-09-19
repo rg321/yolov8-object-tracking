@@ -36,6 +36,8 @@ pip install ultralytics==8.0.0
 #video file
 python yolo\v8\detect\detect_and_trk.py model=yolov8s.pt source="test.mp4" show=True
 
+python yolo/v8/detect/predict.py model=yolov8s.pt source=4camB_R_prep.mp4
+
 #imagefile
 python yolo\v8\detect\detect_and_trk.py model=yolov8m.pt source="path to image"
 
