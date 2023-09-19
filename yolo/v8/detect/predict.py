@@ -2,6 +2,7 @@
 
 import hydra
 import torch
+import os
 
 from ultralytics.yolo.engine.predictor import BasePredictor
 from ultralytics.yolo.utils import DEFAULT_CONFIG, ROOT, ops
@@ -48,25 +49,45 @@ class DetectionPredictor(BasePredictor):
 
         self.data_path = p
         # save_path = str(self.save_dir / p.name)  # im.jpg
-        self.txt_path = str(self.save_dir / 'labels' / p.stem) + ('' if self.dataset.mode == 'image' else f'_{frame}')
+        if not os.path.exists(str(self.save_dir / 'labels')):
+            os.mkdir(str(self.save_dir / 'labels'))
+        self.txt_path = str(self.save_dir / 'labels' / p.stem)# + ('' if self.dataset.mode == 'image' else f'_{frame}')
         log_string += '%gx%g ' % im.shape[2:]  # print string
         self.annotator = self.get_annotator(im0)
 
         det = preds[idx]
         self.all_outputs.append(det)
         if len(det) == 0:
-            return log_string
+            # return log_string
+            line = frame  # label format
+            with open(f'{self.txt_path}.txt', 'a') as f:
+                f.write(str(line) + '\n')
         for c in det[:, 5].unique():
             n = (det[:, 5] == c).sum()  # detections per class
             log_string += f"{n} {self.model.names[int(c)]}{'s' * (n > 1)}, "
         # write
         gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+        max_detections_per_frame = 1 # max detections allowed per frame
         for *xyxy, conf, cls in reversed(det):
-            if self.args.save_txt:  # Write to file
+            if cls == 0 and conf > 0.7:  # Write to file. cls 0 is person
+            # if self.args.save_txt:  # Write to file
                 xywh = (ops.xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                line = (cls, *xywh, conf) if self.args.save_conf else (cls, *xywh)  # label format
-                with open(f'{self.txt_path}.txt', 'a') as f:
-                    f.write(('%g ' * len(line)).rstrip() % line + '\n')
+                line = (cls, *xywh, conf) if self.args.save_conf else (frame, *xywh)  # label format
+                # line = (cls, *xywh, conf) if self.args.save_conf else (cls, *xywh)  # label format
+                if max_detections_per_frame > 0:
+                    with open(f'{self.txt_path}.txt', 'a') as f:
+                        f.write(('%g ' * len(line)).rstrip() % line + '\n')
+                        max_detections_per_frame =-1
+                else:
+                    continue
+            else:
+                if max_detections_per_frame > 0:
+                    line = frame  # label format
+                    with open(f'{self.txt_path}.txt', 'a') as f:
+                        f.write(str(line) + '\n')
+                        max_detections_per_frame =-1
+                else:
+                    continue
 
             if self.args.save or self.args.save_crop or self.args.show:  # Add bbox to image
                 c = int(cls)  # integer class
